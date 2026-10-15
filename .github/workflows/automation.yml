@@ -1,0 +1,77 @@
+name: Microservices Kafka Automation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript validation
+        run: npm run typecheck
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Start local Kafka
+        run: docker compose -f docker/docker-compose.yml up -d
+
+      - name: Wait for Kafka
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -f docker/docker-compose.yml exec -T kafka \
+              kafka-topics --bootstrap-server kafka:29092 --list
+            then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker/docker-compose.yml logs
+          exit 1
+
+      - name: Run contract tests
+        run: npm run test:contract
+
+      # Application integration tests need real service containers or a configured test environment.
+      - name: Run integration tests
+        if: ${{ vars.RUN_KAFKA_INTEGRATION == 'true' }}
+        run: npm run test:integration
+        env:
+          KAFKA_BROKERS: localhost:9092
+          ORDER_API_URL: ${{ vars.ORDER_API_URL }}
+
+      - name: Run E2E tests
+        if: ${{ vars.RUN_APPLICATION_E2E == 'true' }}
+        run: npm run test:e2e
+        env:
+          KAFKA_BROKERS: localhost:9092
+          ORDER_API_URL: ${{ vars.ORDER_API_URL }}
+          RUN_APPLICATION_E2E: "true"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-results
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+      - name: Stop Kafka
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v

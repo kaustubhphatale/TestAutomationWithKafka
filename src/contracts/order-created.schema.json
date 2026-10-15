@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OrderCreated",
+  "type": "object",
+  "required": ["eventId", "eventType", "schemaVersion", "orderId", "customerId", "amount"],
+  "properties": {
+    "eventId": { "type": "string", "minLength": 1 },
+    "eventType": { "const": "OrderCreated" },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "orderId": { "type": "string", "minLength": 1 },
+    "customerId": { "type": "string", "minLength": 1 },
+    "amount": { "type": "number", "exclusiveMinimum": 0 }
+  },
+  "additionalProperties": true
+}
